@@ -4,6 +4,25 @@ import facebook
 from scrapy.spider import BaseSpider
 from scrapy.selector import HtmlXPathSelector
 from MostPopularNews.items import MostpopularnewsItem
+from bs4 import BeautifulSoup
+import requests
+import re
+
+def nation_spider():
+    #Get the Malawi nation page
+    r = requests.get('http://www.mwnation.com')
+    #Create Beatiful soup object
+    soup = BeautifulSoup(r.content)
+    #Get the element with title 'Most read today'
+    most_read = soup.find(text=re.compile('Most Read Today'))
+    most_read_tag = most_read.parent.parent.parent
+    most_read_links = ''
+
+    for link in most_read_tag.find_all('a', href=True):
+        url = link.get('href')
+        most_read_links += '\n' + url
+
+    return most_read_links
 
 def post_page(msg):
     graph = facebook.GraphAPI(
@@ -36,17 +55,22 @@ def get_api(cfg):
   # and make that long-lived token as in Step 3
 
 class NyasaSpider(BaseSpider):
+
     name = "nyasa"
     allowed_domains = ["nyasatimes.com"]
     start_urls = ["http://www.nyasatimes.com/"]
 
     def parse(self,response):
+        # Lets put results in a string
+        now = datetime.datetime.now()
+        date = str(now.strftime("%A, %b %d, %Y"))
+        bot_name = 'Brought to you by our newsbot @ \n https://www.facebook.com/funwithdata/?ref=aymt_homepage_panel'
         #Retrieve most commented articles
-        # comments = response.xpath('.//div[contains(@id,"comments")]')
-        # comments_today = comments.xpath('.//div[contains(@id,"sub11")]')
-        # most_commented_dy = comments_today.xpath('.//ul/li')[0]
-        # most_commented_dy_title = ' '.join(most_commented_dy.xpath('a/text()').extract())
-        # most_commented_dy_link = ' '.join(most_commented_dy.xpath('a/@href').extract())
+        comments = response.xpath('.//div[contains(@id,"comments")]')
+        comments_today = comments.xpath('.//div[contains(@id,"sub11")]')
+        most_commented_dy = comments_today.xpath('.//ul/li')[0]
+        most_commented_dy_title = ' '.join(most_commented_dy.xpath('a/text()').extract())
+        most_commented_dy_link = ' '.join(most_commented_dy.xpath('a/@href').extract())
 
         #Retrieve most popular
         popular = response.xpath('.//div[contains(@id,"popular")]')
@@ -55,19 +79,22 @@ class NyasaSpider(BaseSpider):
         most_popular_dy_title = ' '.join(most_popular_dy.xpath('a/text()').extract())
         most_popular_dy_link = ' '.join(most_popular_dy.xpath('a/@href').extract())
 
-        #Lets put results in a string
-        now = datetime.datetime.now()
-        date = str(now.strftime("%A, %b %d, %Y"))
-        #out_most_commented = 'Nyasatimes Most Commented Today-%s: %s \n %s'%(date, most_commented_dy_title,most_commented_dy_link)
-        out_most_popular = 'Nyasatimes Most Popular Today-%s: %s \n %s' % (date,most_popular_dy_title, most_popular_dy_link)
+        out_most_commented = 'Nyasatimes Most Commented Story Today-%s: %s \n %s \n %s'%(date, most_commented_dy_title,most_commented_dy_link,bot_name)
+        out_most_popular = 'Nyasatimes Most Popular Story Today-%s: %s \n %s \n %s' % (date,most_popular_dy_title, most_popular_dy_link,bot_name)
 
-        #print(out_most_commented)
-        #print(out_most_popular)
-        #Finally we post to facebook
-        #post_facebook_wall(out_most_commented)
+        # print(out_most_commented)
+        # print(out_most_popular)
+        # #Finally we post to facebook
+        post_facebook_wall(out_most_commented)
         post_facebook_wall(out_most_popular)
-
-        # post_page(out_most_commented)
+        #
+        post_page(out_most_commented)
         post_page(out_most_popular)
 
+        #post for the nation
+        nation_links = nation_spider()
+        #print (nation_links)
 
+        #print ('The Nation News Paper Most Read Stories Today-%s: %s \n %s'%(date, nation_links, bot_name))
+        post_facebook_wall('The Nation News Paper Most Read Stories Today-%s: %s \n %s'%(date, nation_links, bot_name))
+        post_page('The Nation News Paper Most Read Stories Today-%s: %s \n'%(date, nation_links, bot_name))
